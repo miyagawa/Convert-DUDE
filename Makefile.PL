@@ -4,4 +4,7 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
     'NAME'	=> 'Convert::DUDE',
     'VERSION_FROM' => 'lib/Convert/DUDE.pm', # finds $VERSION
+    'PREREQ_PM' => {
+	'Unicode::String' => 2.06,
+    },
 );

@@ -5,13 +5,13 @@ SYNOPSIS
       use Convert::DUDE ':all';
 
       # handles 'dq--' prefix
-      $domain  = to_dude($utf16);
-      $utf16   = from_dude($domain);
+      $domain  = to_dude($utf8);
+      $utf8    = from_dude($domain);
 
       # don't care about 'dq--' prefix
       # not exported by default           
-      $dudestr = dude_encode($utf16);
-      $utf16   = dude_decode($dudestr);
+      $dudestr = dude_encode($utf8);
+      $utf8    = dude_decode($dudestr);
 
 DESCRIPTION
     This module provides functions to convert between DUDE (Differential
@@ -30,30 +30,30 @@ FUNCTIONS
     Convert::DUDE.
 
     to_dude
-          $domain = to_dude($utf16str);
+          $domain = to_dude($utf8);
 
-        takes UTF16-encoded string, encodes it in DUDE and adds 'dq--'
-        prefix in front.
+        takes UTF8-encoded string, encodes it in DUDE and adds 'dq--' prefix
+        in front.
 
     from_dude
-          $utf16str = from_dude($domain);
+          $utf8 = from_dude($domain);
 
         takes 'dq--' prefixed DUDE encoded string and decodes it to original
-        UTF16 strings.
+        UTF8 strings.
 
     Following two functions can be exported to your package when you import
     them explicitly.
 
     dude_encode
-          $dude = dude_encode($utf16str);
+          $dude = dude_encode($utf8);
 
-        takes UTF16-encoded string, encodes it in DUDE. Note that it doesn't
+        takes UTF8-encoded string, encodes it in DUDE. Note that it doesn't
         care about 'dq--' prefix.
 
     dude_decode
-          $utf16str = dude_decode($dude);
+          $utf8 = dude_decode($dude);
 
-        takes DUDE encoded string and decodes it to original UTF16 strings.
+        takes DUDE encoded string and decodes it to original UTF8 strings.
         Note that it doesn't care about 'dq--' prefix.
 
     Those functions above may throw exeptions in case of error. You may have
@@ -67,16 +67,17 @@ CLASS METHODS
         gets/sets DUDE prefix. 'dq--' for default.
 
 EXAMPLES
-    HEre's a sample code which does RACE-DUDE conversion.
+    Here's a sample code which does RACE-DUDE conversion.
 
       use Convert::RACE;
       use Convert::DUDE;
-
+      use Unicode::String qw(utf16);
+               
       my $race = "bq--aewrcsy";
 
       eval {
           my $utf16 = from_race($race);
-          my $dude = to_dude($utf16);
+          my $dude = to_dude(utf16($utf16)->utf8);
           print "RACE: $race => DUDE: $dude\n";
       };
 
@@ -87,11 +88,6 @@ EXAMPLES
 CAVEATS
     *   There's no constraints on the input. See internet draft for nameprep
         about IDN input validation.
-
-    *   to_dude() assumes inputs are UTF-16 strings. Thus, this module
-        hasn't been tested against unassigned code points like "u+2C7EF
-        u+2C7EF" in the DUDE intrernet draft. (Do I have to use
-        Unicode::String?)
 
 TODO
     *   Consider mixed-case annotation. See internet draft for DUDE for

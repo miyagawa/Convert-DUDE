@@ -2,7 +2,9 @@ package Convert::DUDE;
 
 use strict;
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
-$VERSION = '0.01';
+$VERSION = '0.02';
+
+use Unicode::String qw(utf8);
 
 BEGIN {
     require Exporter;
@@ -56,7 +58,7 @@ use vars qw(%bits2char %char2bits);
 10110 y
 10111 z
 11000 2
-11001 3	
+11001 3
 11010 4
 11011 5
 11100 6
@@ -87,24 +89,20 @@ use vars qw(%bits2char %char2bits);
 =cut
 
 sub dude_encode ($) {
-    my $input = shift;
-    
-    if (length($input) % 2 != 0) {
-	_die "Odd length of input. to_dude() takes UTF 16 encoded strings";
-    }
-    
+    my $input = utf8(shift);
+
     my $output;
-    
-    my $prev = "\x00\x60";
-    while ($input =~ m/(..)/gs) {
-	my $n = $1;
-	if ($n eq "\x00\x2d") {
+    my $prev = 0x60;
+    for my $i (0 .. $input->length-1) {
+	my $n = $input->substr($i, 1)->ord;
+	if ($n == 0x2d) {
 	    $output .= '-';
 	    next;
 	}
 
 	my $diff = $prev ^ $n;
-	my @quartets = unpack('B*', $diff) =~ m/(.{4})/gs;
+
+	my @quartets = unpack('B*', pack('n*', $diff)) =~ m/(.{4})/gs;
 	shift @quartets while (@quartets && $quartets[0] eq '0000');
 
 	my @fb_quartets = ((map { '1' . $_ } @quartets[0..$#quartets - 1]),
@@ -112,7 +110,6 @@ sub dude_encode ($) {
 	$output .= $bits2char{$_} for (@fb_quartets);
 	$prev = $n;
     }
-
     return $output;
 }
 
@@ -142,22 +139,22 @@ sub to_dude($) {
 
 =end algorithm
 
-=cut    
+=cut
 
 sub dude_decode ($) {
     my $input = lc shift;
-    
-    my $prev = "\x00\x60";
+
+    my $prev = 0x60;
     my @input = split //, $input;
 
-    my $output;
+    my $output = Unicode::String->new;
     while (@input) {
 	if ($input[0] eq '-') {
-	    $output .= "\x00\x2d";
+	    $output->append(Unicode::String::uchr(0x2d));
 	    shift @input;
 	    next;
 	}
-	
+
 	my @quintets;
 	CONSUME: while (1) {
 	    unless (exists $char2bits{$input[0]}) {
@@ -171,18 +168,21 @@ sub dude_decode ($) {
 	    push @quintets, $quintet;
 	    last CONSUME if substr($quintet, 0, 1) eq '0';
 	}
-	unshift @quintets, '00000' if @quintets % 2; # odd
-	
-	my $diff = pack 'B*', join '', map { substr($_, 1) } @quintets;
-	$prev = $prev ^ ("\x00" x (length($prev) - length($diff))) . $diff;
-	$output .= $prev;
+
+	my $diff = 0;
+	my $order = 0;
+	for my $quintet (reverse @quintets) {
+	    $diff += ord(pack('B*', '0000' . substr($quintet, 1))) * (16 ** $order++);
+	}
+	$prev = $prev ^ $diff;
+	$output->append(Unicode::String::uchr($prev));
     }
 
-    unless (dude_encode($output) eq $input) {
+    unless (dude_encode($output->utf8) eq $input) {
 	_die "uniqueness check (paranoia) failed.";
     }
-    
-    return $output;
+
+    return $output->utf8;
 }
 
 sub from_dude ($) {
@@ -191,9 +191,10 @@ sub from_dude ($) {
     $dude =~ s/^$prefix//o;
     return dude_decode($dude);
 }
-		 
-		
+
+
 1;
+
 __END__
 
 =head1 NAME
@@ -205,13 +206,13 @@ Convert::DUDE - Conversion between Unicode and DUDE
   use Convert::DUDE ':all';
 
   # handles 'dq--' prefix
-  $domain  = to_dude($utf16);
-  $utf16   = from_dude($domain);
+  $domain  = to_dude($utf8);
+  $utf8    = from_dude($domain);
 
   # don't care about 'dq--' prefix
   # not exported by default	      
-  $dudestr = dude_encode($utf16);
-  $utf16   = dude_decode($dudestr);
+  $dudestr = dude_encode($utf8);
+  $utf8    = dude_decode($dudestr);
 
 =head1 DESCRIPTION
 
@@ -235,17 +236,17 @@ Convert::DUDE.
 
 =item to_dude
 
-  $domain = to_dude($utf16str);
+  $domain = to_dude($utf8);
 
-takes UTF16-encoded string, encodes it in DUDE and adds 'dq--' prefix
+takes UTF8-encoded string, encodes it in DUDE and adds 'dq--' prefix
 in front.
 
 =item from_dude
 
-  $utf16str = from_dude($domain);
+  $utf8 = from_dude($domain);
 
 takes 'dq--' prefixed DUDE encoded string and decodes it to original
-UTF16 strings.
+UTF8 strings.
 
 =back
 
@@ -256,16 +257,16 @@ import them explicitly.
 
 =item dude_encode
 
-  $dude = dude_encode($utf16str);
+  $dude = dude_encode($utf8);
 
-takes UTF16-encoded string, encodes it in DUDE. Note that it doesn't
+takes UTF8-encoded string, encodes it in DUDE. Note that it doesn't
 care about 'dq--' prefix.
 
 =item dude_decode
 
-  $utf16str = dude_decode($dude);
+  $utf8 = dude_decode($dude);
 
-takes DUDE encoded string and decodes it to original UTF16
+takes DUDE encoded string and decodes it to original UTF8
 strings. Note that it doesn't care about 'dq--' prefix.
 
 =back
@@ -288,16 +289,17 @@ gets/sets DUDE prefix. 'dq--' for default.
 
 =head1 EXAMPLES
 
-HEre's a sample code which does RACE-DUDE conversion.
+Here's a sample code which does RACE-DUDE conversion.
 
   use Convert::RACE;
   use Convert::DUDE;
-
+  use Unicode::String qw(utf16);
+	       
   my $race = "bq--aewrcsy";
 
   eval {
       my $utf16 = from_race($race);
-      my $dude = to_dude($utf16);
+      my $dude = to_dude(utf16($utf16)->utf8);
       print "RACE: $race => DUDE: $dude\n";
   };
 
@@ -313,12 +315,6 @@ HEre's a sample code which does RACE-DUDE conversion.
 
 There's no constraints on the input. See internet draft for nameprep
 about IDN input validation.
-
-=item *
-
-to_dude() assumes inputs are UTF-16 strings. Thus, this module hasn't
-been tested against unassigned code points like "u+2C7EF u+2C7EF" in
-the DUDE intrernet draft. (Do I have to use Unicode::String?)
 
 =back
 
